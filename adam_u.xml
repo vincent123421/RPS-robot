@@ -1,5 +1,21 @@
 <?xml version='1.0' encoding='utf-8'?>
 <mujoco model="adam_u">
+  <!-- 名词解释（小白友好）：
+       - body：刚体/部件，具有质量和形状，可层次嵌套形成整机结构。
+       - joint：关节，连接两个 body，定义可转动或可位移的自由度（如“腕滚转”）。
+       - geom：几何体，用于渲染(visual)或碰撞(collision)；mesh 指向外部 .obj 网格。
+       - inertial：质心、质量和惯性张量，决定物理仿真的“重量”和“转动特性”。
+       - actuator：执行器，这里用 motor（电机）为某个 joint 提供控制力/速度。
+       - ctrlrange：可施加的控制信号范围（例如 [-1, 1]），防止控制过强导致失稳。
+       层级关系：
+        - 本文件由 main.py 读取并用于 MuJoCo 仿真展示；不直接被其它 Python 脚本调用。
+       - 引用的网格文件位于 assets/ 目录；与训练/识别脚本（train.py/test.py 等）无直接依赖。
+       文件用途：MuJoCo 模型定义（上半身与双臂/双手）
+       最后修改：2025-12-04
+       使用建议：运行 main.py 以加载与控制本模型。
+  -->
+  <!-- 文件概述：上半身与双臂/双手的 MuJoCo 模型，用于石头剪刀布仿真 -->
+  <!-- 关节命名遵循 waist/shoulder/elbow/wrist 以及各指 MCP/DIP 等约定 -->
   <default>
     <default class="visual">
       <geom group="2" type="mesh" contype="0" conaffinity="0" density="0" />
@@ -9,6 +25,7 @@
     </default>
   </default>
   <compiler angle="radian" meshdir="assets/" />
+  <!-- 资源区：材质与网格文件声明，供几何体引用 -->
   <asset>
     <material name="black" specular="0.0" shininess="0.25" rgba="0.2 0.2 0.2 1.000000" />
     <material name="sliver" specular="0.0" shininess="0.25" rgba="0.7 0.7 0.7 1.000000" />
@@ -91,9 +108,11 @@
     <mesh name="neckYaw" file="neckYaw.obj" />
     <mesh name="neckPitch" file="neckPitch.obj" />
   </asset>
+  <!-- 物理层次结构：从底座到腰部→躯干→左右臂→手指→颈部 -->
   <worldbody>
     <body name="lifting_Columns" pos="0 0 1.05">
       <inertial pos="9.03635e-05 -3.16723e-05 -0.722725" quat="0.499642 0.499654 -0.50034 0.500364" mass="16.1205" diaginertia="0.720003 0.582931 0.351926" />
+      <!-- 自由底座：允许模型在 6 自由度上位移与旋转 -->
       <joint name="floating_base" type="free" limited="false" actuatorfrclimited="false" />
       <geom mesh="lifting_Columns_0" material="sliver" class="visual" />
       <geom mesh="lifting_Columns_1" material="black" class="visual" />
@@ -120,6 +139,7 @@
             <geom mesh="torso_1" material="sliver" class="visual" />
             <geom mesh="torso_0" class="collision" />
             <geom mesh="torso_1" class="collision" />
+            <!-- 左臂链路开始：肩俯仰→肩滚转→肩偏航→肘→腕偏航→腕俯仰→腕滚转→手指 -->
             <body name="shoulderPitchLeft" pos="0 0.16049 0.25755" quat="0.984807 0.17365 0 0">
               <inertial pos="-0.00066946 0.0263972 0" quat="-0.0066135 0.707076 0.0066135 0.707076" mass="0.216536" diaginertia="0.0003696 0.000307242 0.000186398" />
               <joint name="shoulderPitch_Left" pos="0 0 0" axis="0 1 0" range="-3.613 2.042" actuatorfrcrange="-65 65" />
@@ -264,6 +284,7 @@
                 </body>
               </body>
             </body>
+            <!-- 右臂链路开始：结构与左臂对称，命名以 R_ 前缀表示右手各关节 -->
             <body name="shoulderPitchRight" pos="0 -0.16049 0.25755" quat="0.984807 -0.17365 0 0">
               <inertial pos="-0.00066946 -0.0263972 0" quat="0.0066135 0.707076 -0.0066135 0.707076" mass="0.216536" diaginertia="0.0003696 0.000307242 0.000186398" />
               <joint name="shoulderPitch_Right" pos="0 0 0" axis="0 1 0" range="-3.613 2.042" actuatorfrcrange="-65 65" />
@@ -408,6 +429,7 @@
                 </body>
               </body>
             </body>
+            <!-- 颈部：水平偏航 + 俯仰两自由度，用于头部朝向演示 -->
             <body name="neckYaw" pos="-0.013 0 0.29855">
               <inertial pos="0.0229166 -0.00099716 0.100187" quat="0.528239 -0.102157 -0.0585684 0.840891" mass="0.412424" diaginertia="0.00129645 0.00128003 0.00012854" />
               <joint name="neckYaw" pos="0 0 0" axis="0 0 1" range="-1.571 1.571" actuatorfrcrange="-6.4 6.4" />
@@ -425,7 +447,9 @@
       </body>
     </body>
   </worldbody>
+  <!-- 执行器映射：为各关节提供力/速度控制接口，范围与命名与关节对应 -->
   <actuator>
+    <!-- motor：为指定关节提供控制输入；ctrlrange 是控制幅度范围（防止过激控制）。 -->
     <motor joint="waistRoll" name="waistRoll" ctrlrange="-110.0 110.0" />
     <motor joint="waistPitch" name="waistPitch" ctrlrange="-110.0 110.0" />
     <motor joint="waistYaw" name="waistYaw" ctrlrange="-110.0 110.0" />
